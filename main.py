@@ -1,7 +1,7 @@
 import sys
 import getopt
 
-acceptableModes = ['face', 'hand']
+acceptableModes = ['face', 'body']
 
 try:
     arg_val_list, left_over_args = getopt.getopt(sys.argv[1:], 'd:m:', ['drone =', 'mode ='])
@@ -21,6 +21,10 @@ if mode in acceptableModes:
     if mode == 'face':
         from modes.face import face
         face.run(drone)
+        quit()
+    elif mode == 'body':
+        from modes.body import body
+        body.run(drone)
         quit()
 else:
     print('Error: Mode '+mode+' unsupported!')
