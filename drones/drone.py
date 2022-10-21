@@ -35,6 +35,10 @@ class DroneInterface(ABC):
         pass
 
     @abstractmethod
+    def stabilize(self):
+        pass
+
+    @abstractmethod
     def move(self, heading, altitude, speed):
         pass
 

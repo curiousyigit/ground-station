@@ -22,6 +22,9 @@ class DummyDrone(DroneInterface):
     def takeoff(self):
         return super().takeoff()
 
+    def stabilize(self):
+        return super().stabilize()
+
     def move(self, heading, altitude, speed):
         return super().move(heading, altitude, speed)
 

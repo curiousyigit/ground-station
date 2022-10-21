@@ -41,7 +41,10 @@ def run(drone_name):
 
                         # set current error as previous for next interation
                         previous_error = error
+                    else:
+                        drone.stabilize()
                 else:
+                    drone.stabilize()
                     print('Warn: No face detected!')
 
         # display the resulting frame
