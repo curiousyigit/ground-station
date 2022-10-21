@@ -6,6 +6,15 @@ class DummyDrone(DroneInterface):
     def initialize(self):
         return super().initialize()
 
+    def get_battery(self):
+        return 100
+
+    def get_distance_factor(self):
+        return 1000
+
+    def get_pids(self):
+        return [[0.3, 0.1, 0], [0.3, 0.1, 0], [0.3, 0.1, 0]]
+
     def initialize_video_feed(self, width=680, height=420):
         self.video_capture = cv2.VideoCapture(0)
         self.video_resolution = [width, height]
@@ -25,7 +34,25 @@ class DummyDrone(DroneInterface):
     def stabilize(self):
         return super().stabilize()
 
-    def move(self, yaw, vertical, left_right, forward_backward):
+    def up(self, distance_cm):
+        return super().up(distance_cm)
+
+    def down(self, distance_cm):
+        return super().down(distance_cm)
+
+    def left(self, distance_cm):
+        return super().left(distance_cm)
+
+    def right(self, distance_cm):
+        return super().right(distance_cm)
+    
+    def turn_left(self, degrees):
+        return super().turn_left(degrees)
+
+    def turn_right(self, degrees):
+        return super().turn_right(degrees)
+
+    def rc(self, yaw, vertical, left_right, forward_backward):
         return super().move(yaw, vertical, left_right, forward_backward)
 
     def special_maneuver(self, maneuver):

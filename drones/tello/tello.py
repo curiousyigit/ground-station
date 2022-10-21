@@ -1,3 +1,5 @@
+import cv2
+import numpy
 from djitellopy import Tello as TelloPY
 
 from drones.drone import DroneInterface
@@ -7,20 +9,30 @@ class Tello(DroneInterface):
         self.tello = TelloPY()
         self.tello.connect()
         self.stabilize()
-        print(self.tello.get_battery())
-        self.tello.streamoff()
+        print(f'Battery: {self.get_battery()}')
 
-    def initialize_video_feed(self, width=852, height=480):
+    def get_battery(self):
+        return self.tello.get_battery()
+
+    def get_distance_factor(self):
+        return 1000
+
+    def get_pids(self):
+        #[heading, altitude, forward_backward]
+        #[[kd, kp, ki], [kd, kp, ki], [kd, kp, ki]]
+        return [[0.2, 0.1, 0], [0.3, 0.2, 0], [0.1, 0.2, 0]]
+
+    def initialize_video_feed(self, width=960, height=720):
         # acceptable 1280x720 & 852x480
-        if [width, height] not in [[852, 480], [1280, 720]]:
+        if [width, height] not in [[960, 720]]:
             raise Exception('Unsupported video resolution for tello!')
 
         self.video_resolution = [width, height]
-        self.tello.set_video_resolution(TelloPY.RESOLUTION_480P if height == 480 else TelloPY.RESOLUTION_720P)
+        # self.tello.set_video_resolution(TelloPY.RESOLUTION_480P if height == 480 else TelloPY.RESOLUTION_720P)
         self.tello.streamon()
 
     def get_video_frame(self):
-        frame = self.tello.get_frame_read()
+        frame = self.tello.get_frame_read().frame
         return frame
 
     def get_video_resolution(self):
@@ -30,14 +42,35 @@ class Tello(DroneInterface):
         self.tello.takeoff()
 
     def stabilize(self):
-        self.move(0, 0, 0, 0)
+        self.rc(0, 0, 0, 0)
 
-    def move(self, yaw, vertical, left_right, forward_backward):
-        self.yaw_velocity = yaw
-        self.up_down_velocity = vertical
-        self.left_right_velocity = left_right
-        self.for_back_velocity = forward_backward
-        self.tello.send_rc_control(self.left_right_velocity, self.for_back_velocity, self.up_down_velocity, self.yaw_velocity)
+    def up(self, distance_cm):
+        self.tello.move_up(distance_cm)
+
+    def up(self, distance_cm):
+        self.tello.move_up(distance_cm)
+
+    def down(self, distance_cm):
+        self.tello.move_down(distance_cm)
+
+    def left(self, distance_cm):
+        self.tello.move_left(distance_cm)
+
+    def right(self, distance_cm):
+        self.tello.move_right(distance_cm)
+    
+    def turn_left(self, degrees):
+        self.tello.rotate_counter_clockwise(degrees * 10)
+
+    def turn_right(self, degrees):
+        self.tello.rotate_clockwise(degrees * 10)
+
+    def rc(self, yaw, vertical, left_right, forward_backward):
+        self.yaw_velocity = int(numpy.clip(yaw, -100, 100))
+        self.up_down_velocity = int(numpy.clip(vertical, -100, 100))
+        self.left_right_velocity = int(numpy.clip(left_right, -100, 100))
+        self.forward_back_velocity = int(numpy.clip(forward_backward, -100, 100))
+        self.tello.send_rc_control(self.left_right_velocity, self.forward_back_velocity, self.up_down_velocity, self.yaw_velocity)
 
     def special_maneuver(self, maneuver):
         return super().special_maneuver()
@@ -47,4 +80,4 @@ class Tello(DroneInterface):
 
     def destroy(self):
         self.tello.streamoff()
-        self.tello.end()
+        # self.tello.end()

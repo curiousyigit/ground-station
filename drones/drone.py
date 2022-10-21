@@ -1,4 +1,4 @@
-from abc import ABC, abstractmethod
+from abc import ABC, abstractmethod, abstractproperty
 
 def get_drone(drone_name):
     acceptable_drones = ['dummy', 'tello']
@@ -23,6 +23,20 @@ class DroneInterface(ABC):
         pass
 
     @abstractmethod
+    def get_battery(self):
+        pass
+
+    @abstractmethod
+    def get_distance_factor(self):
+        pass
+
+    @abstractmethod
+    def get_pids(self):
+        #[heading, altitude, forward_backward]
+        #[[kd, kp, ki], [kd, kp, ki], [kd, kp, ki]]
+        pass
+
+    @abstractmethod
     def initialize_video_feed(self, width, height):
         pass
 
@@ -43,7 +57,31 @@ class DroneInterface(ABC):
         pass
 
     @abstractmethod
-    def move(self, yaw, vertical, left_right, forward_backward):
+    def up(self, distance_cm):
+        pass
+
+    @abstractmethod
+    def down(self, distance_cm):
+        pass
+
+    @abstractmethod
+    def left(self, distance_cm):
+        pass
+
+    @abstractmethod
+    def right(self, distance_cm):
+        pass
+
+    @abstractmethod
+    def turn_left(self, degrees):
+        pass
+
+    @abstractmethod
+    def turn_right(self, degrees):
+        pass
+
+    @abstractmethod
+    def rc(self, yaw, vertical, left_right, forward_backward):
         pass
 
     @abstractmethod
