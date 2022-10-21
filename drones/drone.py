@@ -9,6 +9,10 @@ def get_drone(drone_name):
         if drone_name == 'dummy':
             from drones.dummyDrone.dummyDrone import DummyDrone
             return DummyDrone()
+        elif drone_name == 'tello':
+            from drones.tello.tello import Tello
+            return Tello()
+            
     else:
         print('Error: Drone '+drone_name+' not supported!')
         quit()
@@ -39,7 +43,7 @@ class DroneInterface(ABC):
         pass
 
     @abstractmethod
-    def move(self, heading, altitude, speed):
+    def move(self, yaw, vertical, left_right, forward_backward):
         pass
 
     @abstractmethod
