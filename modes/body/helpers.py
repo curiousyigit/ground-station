@@ -37,8 +37,8 @@ def calculate_tracking_error(body_center: Tuple[int, int], desired_body_to_video
     error_d = (desired_body_to_video_ratio - (area_body / area_video)) * distance_factor
 
     # smoothened values using PID
-    smooth_error_w = (pids[0][0] * error_w) + (pids[0][1] * (error_w - previous_error[0]))
-    smooth_error_h = (pids[1][0] * error_h) + (pids[1][1] * (error_h - previous_error[1]))
-    smooth_error_d = (pids[2][0] * error_d) + (pids[2][1] * (error_d - previous_error[2]))
+    smooth_error_w = (pids[0][0] * (error_w - previous_error[0])) + (pids[0][2] * error_w)
+    smooth_error_h = (pids[1][0] * (error_h - previous_error[1])) + (pids[1][2] * error_h)
+    smooth_error_d = (pids[2][0] * (error_d - previous_error[2])) + (pids[2][2] * error_d)
 
     return [smooth_error_w, smooth_error_h, smooth_error_d]

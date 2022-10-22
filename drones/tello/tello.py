@@ -16,11 +16,11 @@ class Tello(DroneInterface):
 
     def get_distance_factor(self):
         return 1000
-
+ 
     def get_pids(self):
         #[heading, altitude, forward_backward]
-        #[[kd, kp, ki], [kd, kp, ki], [kd, kp, ki]]
-        return [[0.2, 0.1, 0], [0.3, 0.2, 0], [0.1, 0.2, 0]]
+        #[[kp, ki, kd], [kp, ki, kd], [kp, ki, kd]]
+        return [[0.15, 0, 0.03], [0.15, 0, 0.05], [0.2, 0, 0.05]]
 
     def initialize_video_feed(self, width=960, height=720):
         # acceptable 1280x720 & 852x480
@@ -28,7 +28,6 @@ class Tello(DroneInterface):
             raise Exception('Unsupported video resolution for tello!')
 
         self.video_resolution = [width, height]
-        # self.tello.set_video_resolution(TelloPY.RESOLUTION_480P if height == 480 else TelloPY.RESOLUTION_720P)
         self.tello.streamon()
 
     def get_video_frame(self):

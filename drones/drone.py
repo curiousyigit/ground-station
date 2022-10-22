@@ -33,7 +33,7 @@ class DroneInterface(ABC):
     @abstractmethod
     def get_pids(self):
         #[heading, altitude, forward_backward]
-        #[[kd, kp, ki], [kd, kp, ki], [kd, kp, ki]]
+        #[[kp, ki, kd], [kp, ki, kd], [kp, ki, kd]]
         pass
 
     @abstractmethod
