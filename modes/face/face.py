@@ -47,7 +47,7 @@ def run(drone_name):
             # find nearest face and get it's coordinates and area
             frame, face_center, face_area = face.find_nearest_face(frame, (0, 0 if follow else 255, 255))
 
-            if airborne or 1==1:
+            if airborne:
                 if face_center:
                     if follow:
                         # get error resulting from PID controller calculations
