@@ -15,7 +15,7 @@ class DummyDrone(DroneInterface):
     def get_pids(self):
         return [[0.3, 0.1, 0], [0.3, 0.1, 0], [0.3, 0.1, 0]]
 
-    def initialize_video_feed(self, width=680, height=420):
+    def initialize_video_feed(self, width=640, height=480):
         self.video_capture = cv2.VideoCapture(0)
         self.video_resolution = [width, height]
         self.video_capture.set(cv2.CAP_PROP_FRAME_WIDTH, width)
@@ -53,7 +53,7 @@ class DummyDrone(DroneInterface):
         return super().turn_right(degrees)
 
     def rc(self, yaw, vertical, left_right, forward_backward):
-        return super().move(yaw, vertical, left_right, forward_backward)
+        return super().rc(yaw, vertical, left_right, forward_backward)
 
     def special_maneuver(self, maneuver):
         return super().special_maneuver()
