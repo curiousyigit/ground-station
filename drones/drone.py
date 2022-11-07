@@ -27,13 +27,9 @@ class DroneInterface(ABC):
         pass
 
     @abstractmethod
-    def get_distance_factor(self):
-        pass
-
-    @abstractmethod
     def get_pids(self):
-        #[heading, altitude, forward_backward]
-        #[[kp, ki, kd], [kp, ki, kd], [kp, ki, kd]]
+        #[heading, altitude, left_right, forward_backward]
+        #[[kp, ki, kd], [kp, ki, kd], [kp, ki, kd], [kp, ki, kd]]
         pass
 
     @abstractmethod
@@ -94,4 +90,8 @@ class DroneInterface(ABC):
 
     @abstractmethod
     def destroy(self):
+        pass
+
+    @abstractmethod
+    def debug(self):
         pass

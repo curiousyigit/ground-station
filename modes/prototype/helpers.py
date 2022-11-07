@@ -1,11 +1,9 @@
 import cv2
-import os
 from typing import Tuple
 
-def find_nearest_face(frame, draw_color=(0, 0, 255)):
-    face_cascade = cv2.CascadeClassifier(os.path.join(os.path.dirname( __file__ ), '..', '..', 'resources', 'haarcascades', 'haarcascade_frontalface_default.xml'))
+def find_nearest_face(frame, cascade_classifier, draw_color=(0, 0, 255)):
     grey = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    faces = face_cascade.detectMultiScale(grey, 1.4, 4)
+    faces = cascade_classifier.detectMultiScale(grey, 1.1, 1)
     nearest_face = []
     nearest_face_center = []
     nearest_face_area = []

@@ -9,11 +9,8 @@ class DummyDrone(DroneInterface):
     def get_battery(self):
         return 100
 
-    def get_distance_factor(self):
-        return 1000
-
     def get_pids(self):
-        return [[0.3, 0.1, 0], [0.3, 0.1, 0], [0.3, 0.1, 0]]
+        return [[0.5, 0.001, 0], [0.5, 0.001, 0], [0.3, 0.001, 0], [0.5, 0.001, 0]]
 
     def initialize_video_feed(self, width=640, height=480):
         self.video_capture = cv2.VideoCapture(0)
@@ -53,13 +50,17 @@ class DummyDrone(DroneInterface):
         return super().turn_right(degrees)
 
     def rc(self, yaw, vertical, left_right, forward_backward):
-        return super().rc(yaw, vertical, left_right, forward_backward)
+        print(f'rc yaw: {yaw}, vertical: {vertical}, left_right: {left_right}, forward_backward: {forward_backward}')
 
     def special_maneuver(self, maneuver):
-        return super().special_maneuver()
+        return super().special_maneuver(maneuver)
 
     def land(self):
         return super().land()
 
     def destroy(self):
         self.video_capture.release()
+
+    async def debug(self):
+        import drones.dummyDrone.debug as debug
+        await debug.run_debug(self)

@@ -1,5 +1,5 @@
-# Drone Controller
-This is a Python 3 based drone controller built within **Shoaib Feda**'s bachelors graduation project at the **Polytechnic Institute of Tomar**, Portugal under the supervision of **Professor Gabriel Pires**
+# Ground Station
+This is a Python 3 based drone ground station built within **Shoaib Feda**'s bachelors graduation project at the **Polytechnic Institute of Tomar**, Portugal under the supervision of **Professor Gabriel Pires**
 <br></br>
 # Getting started
 ## Assumptions

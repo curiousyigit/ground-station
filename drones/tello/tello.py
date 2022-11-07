@@ -7,9 +7,8 @@ from drones.drone import DroneInterface
 class Tello(DroneInterface):
     def initialize(self):
         self.tello = TelloPY()
+        self.tello.RESPONSE_TIMEOUT = 0.5
         self.tello.connect()
-        self.stabilize()
-        print(f'Battery: {self.get_battery()}')
 
     def get_battery(self):
         return self.tello.get_battery()
@@ -18,9 +17,9 @@ class Tello(DroneInterface):
         return 1000
  
     def get_pids(self):
-        #[heading, altitude, forward_backward]
-        #[[kp, ki, kd], [kp, ki, kd], [kp, ki, kd]]
-        return [[0.15, 0, 0.03], [0.15, 0, 0.05], [0.2, 0, 0.05]]
+        #[heading, altitude, left_right, forward_backward]
+        #[[kp, ki, kd], [kp, ki, kd], [kp, ki, kd], [kp, ki, kd]]
+        return [[0.5, 0.001, 0], [0.5, 0.001, 0], [0.5, 0.001, 0], [0.5, 0.001, 0]]
 
     def initialize_video_feed(self, width=960, height=720):
         # acceptable 1280x720 & 852x480
@@ -72,7 +71,14 @@ class Tello(DroneInterface):
         self.tello.send_rc_control(self.left_right_velocity, self.forward_back_velocity, self.up_down_velocity, self.yaw_velocity)
 
     def special_maneuver(self, maneuver):
-        return super().special_maneuver()
+        if maneuver == 'left_flip':
+            self.tello.flip_left()
+        elif maneuver == 'right_flip':
+            self.tello.flip_right()
+        elif maneuver == 'back_flip':
+            self.tello.flip_back()
+        elif maneuver == 'front_flip':
+            self.tello.flip_forward()
 
     def land(self):
         self.tello.land()
@@ -80,3 +86,7 @@ class Tello(DroneInterface):
     def destroy(self):
         self.tello.streamoff()
         # self.tello.end()
+
+    async def debug(self):
+        from drones.tello import debug
+        await debug.run_debug(self)
