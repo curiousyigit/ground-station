@@ -10,7 +10,7 @@ class DummyDrone(DroneInterface):
         return 100
 
     def get_pids(self):
-        return [[0.5, 0.001, 0], [0.5, 0.001, 0], [0.3, 0.001, 0], [0.5, 0.001, 0]]
+        return [[0.5, 0.001, 0], [0.5, 0.001, 0], [0.5, 0.001, 0], [0.5, 0.001, 0]]
 
     def initialize_video_feed(self, width=640, height=480):
         self.video_capture = cv2.VideoCapture(0)

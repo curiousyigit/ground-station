@@ -25,7 +25,7 @@ class CombinedMode():
         self.quit = False
         self.airborne = False
         self.stabilized_since_last_iteration = True
-        self.follow_face = False
+        self.vision_mode = False
 
         self.frame = None
         self.w, self.h = 0, 0
@@ -38,6 +38,8 @@ class CombinedMode():
         self.btn1, self.btn2, self.btn3, self.btn4 = None, None, None, None
         self.calb_system, self.calb_gyro, self.calb_accel, self.calb_mag = None, None, None, None
         self.yaw_raw, self.yaw_biased, self.roll_raw, self.roll_biased, self.pitch_raw, self.pitch_biased = None, None, None, None, None, None
+        self.manual_yaw_corrected, self.manual_roll_corrected, self.manual_pitch_corrected = None, None, None
+        self.manual_vertical_speed = None
         self.imu_safe_range = True
 
         self.video_command = None
@@ -94,27 +96,30 @@ class CombinedMode():
         await send_to_peripheral('get_continuous')
 
         p_vertical_speed = 0
-        p_yaw = self.yaw_biased
-        p_roll = self.roll_biased
-        p_pitch = self.pitch_biased
+        p_yaw = self.manual_yaw_corrected
+        p_roll = self.manual_roll_corrected
+        p_pitch = self.manual_pitch_corrected
 
 
         while not self.quit:
             start = time.time()
 
-            if self.pitch_biased < -90 or self.pitch_biased > 90:
+            if self.pitch_raw < -90 or self.pitch_raw > 90:
                 self.imu_safe_range = False
-                yaw_clamped = 0
-                roll_clamped = 0
-                pitch_clamped = 0
+                self.manual_yaw_corrected = 0
+                self.manual_roll_corrected = 0
+                self.manual_pitch_corrected = 0
             else:
                 self.imu_safe_range = True
-                yaw_gain = 1.5
-                roll_gain = 1.5
-                pitch_gain = 2
-                yaw_clamped = int(map(self.yaw_biased, 0, 359, -100, 100))
-                roll_clamped = int(map(self.roll_biased, -89, 89, -100, 100))
-                pitch_clamped = int(map(self.pitch_biased, -179, 179, -100, 100))
+                yaw_gain = 3
+                roll_gain = 2
+                pitch_gain = 4
+                mapped_yaw = map(self.yaw_biased, -180, 180, -100, 100)
+                mapped_roll = map(self.roll_biased, -89, 89, -100, 100)
+                mapped_pitch = map(self.pitch_biased, -179, 179, -100, 100)
+                self.manual_yaw_corrected = int(clamp(mapped_yaw * yaw_gain, -100, 100))
+                self.manual_roll_corrected = int(clamp(mapped_roll * roll_gain, -100, 100))
+                self.manual_pitch_corrected = int(clamp(mapped_pitch * pitch_gain, -100, 100))
 
             if self.peripheral_connected != p_peripheral_connected:
                 await send_to_peripheral(f'led3={0 if self.peripheral_connected else 1}')
@@ -144,25 +149,25 @@ class CombinedMode():
             btn4_prev_state = self.btn4
 
             if self.airborne:
-                vertical_speed = 0
+                self.manual_vertical_speed = 0
                 if self.btn2:
-                    vertical_speed = 50
+                    self.manual_vertical_speed = 50
                 elif self.btn3:
-                    vertical_speed = -50
+                    self.manual_vertical_speed = -50
 
-                if self.imu_safe_range and (vertical_speed != p_vertical_speed or yaw_clamped != p_yaw or roll_clamped != p_roll or pitch_clamped != p_pitch):
+                if self.imu_safe_range and (self.manual_vertical_speed != p_vertical_speed or self.manual_yaw_corrected != p_yaw or self.manual_roll_corrected != p_roll or self.manual_pitch_corrected != p_pitch):
                     if self.peripheral_manual_control:
-                        self.drone.rc(yaw_clamped, vertical_speed, roll_clamped, pitch_clamped)
-                        p_vertical_speed = vertical_speed
-                        p_yaw = yaw_clamped
-                        p_roll = roll_clamped
-                        p_pitch = pitch_clamped
-                    elif vertical_speed != p_vertical_speed:
-                        self.drone.rc(0, vertical_speed, 0, 0)
-                        p_vertical_speed = vertical_speed
+                        self.drone.rc(self.manual_yaw_corrected, self.manual_vertical_speed, self.manual_roll_corrected, self.manual_pitch_corrected)
+                        p_vertical_speed = self.manual_vertical_speed
+                        p_yaw = self.manual_yaw_corrected
+                        p_roll = self.manual_roll_corrected
+                        p_pitch = self.manual_pitch_corrected
+                    elif self.manual_vertical_speed != p_vertical_speed:
+                        self.drone.rc(0, self.manual_vertical_speed, 0, 0)
+                        p_vertical_speed = self.manual_vertical_speed
 
-                if not self.peripheral_manual_control and self.follow_face:
-                    self.drone.rc(self.video_corrections[0], -self.video_corrections[1], self.video_corrections[2], self.video_corrections[3])
+                if not self.peripheral_manual_control and self.vision_mode:
+                    self.drone.rc(self.video_corrections[0] * 2, -self.video_corrections[1] * 2, self.video_corrections[2] * 2, self.video_corrections[3] * 2)
 
                 if self.video_command == 'land':
                     self.land()
@@ -180,21 +185,21 @@ class CombinedMode():
                 key = cv2.waitKey(1) & 0xFF
                 if key == ord('q'):
                     # button 'q' to quit
-                    self.follow_face= False
+                    self.vision_mode = False
                     self.drone.stabilize()
                     self.quit = True
                 elif key == ord('t') and not self.airborne:
                     self.takeoff()
                 elif key == ord('l') and self.airborne:
                     self.land()
-                elif key == ord('f') and not self.follow_face:
+                elif key == ord('f') and not self.vision_mode:
                     print('Following!')
-                    self.follow_face= True
-                elif key == ord('f') and self.follow_face:
+                    self.vision_mode = True
+                elif key == ord('f') and self.vision_mode:
                     print('Stopped following!')
                     self.drone.stabilize()
                     self.stabilized_since_last_iteration = True
-                    self.follow_face= False
+                    self.vision_mode = False
                 elif key == ord('a'):
                     self.drone.rc(0, 0, -50, 0)
                     self.stabilized_since_last_iteration = False
@@ -269,8 +274,28 @@ class CombinedMode():
 
         previous_horizontal_error = 0
         previous_horizontal_integral_error = 0
+        previous_horizontal_bias = 0
         previous_vertical_error = 0
         previous_vertical_integral_error = 0
+        previous_vertical_bias = 0
+        biased = False
+
+        def resetBias():
+            nonlocal biased
+            nonlocal previous_horizontal_error
+            nonlocal previous_horizontal_integral_error
+            nonlocal previous_horizontal_bias
+            nonlocal previous_vertical_error
+            nonlocal previous_vertical_integral_error
+            nonlocal previous_vertical_bias
+
+            biased = False
+            # previous_horizontal_error = 0
+            # previous_horizontal_integral_error = 0
+            # previous_horizontal_bias = 0
+            # previous_vertical_error = 0
+            # previous_vertical_integral_error = 0
+            # previous_vertical_bias = 0
 
         previous_gesture = None
         previous_gesture_at = time.time()
@@ -293,250 +318,275 @@ class CombinedMode():
                     if frame is not None:
                         t_face_s = time.time()
 
-                        bgr = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                        if self.vision_mode:
 
-                        faces_result = face_detection.process(bgr)
-                        life = 3 # seconds
-                        frequency = 1 / self.vps if self.vps else 1 / 30
+                            bgr = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
-                        
-                        cur_faces = []
-                        if faces_result.detections:
-                            for j, detection in enumerate(faces_result.detections):
-                                bounding_box = detection.location_data.relative_bounding_box
-                                top_left = (int(bounding_box.xmin * self.w), int(bounding_box.ymin * self.h))
-                                width = int(bounding_box.width * self.w)
-                                height = int(bounding_box.height * self.h)
-                                bottom_right = ((top_left[0] + width), (top_left[1] + height))
-                                center = (int(top_left[0] + width/2), int(top_left[1] + height/2))
+                            faces_result = face_detection.process(bgr)
+                            life = 0.5 # seconds
+                            frequency = 1 / self.vps if self.vps else 1 / 30
 
-                                cur_faces.append({
-                                    'id': j,
-                                    'center': center,
-                                    'top_left': top_left,
-                                    'bottom_right': bottom_right,
-                                    'width': width,
-                                    'height': height,
-                                    'taken': False,
-                                    'life': life
-                                })
-                        for i, face in enumerate(faces):
-                            faces[i]['taken'] = False
+                            
+                            cur_faces = []
+                            if faces_result.detections:
+                                for j, detection in enumerate(faces_result.detections):
+                                    bounding_box = detection.location_data.relative_bounding_box
+                                    top_left = (int(bounding_box.xmin * self.w), int(bounding_box.ymin * self.h))
+                                    width = int(bounding_box.width * self.w)
+                                    height = int(bounding_box.height * self.h)
+                                    bottom_right = ((top_left[0] + width), (top_left[1] + height))
+                                    center = (int(top_left[0] + width/2), int(top_left[1] + height/2))
 
-                        if len(faces) == 0 and len(cur_faces) != 0:
-                            for cur_face in cur_faces:
-                                cur_face['id'] = face_id_counter
-                                cur_face['taken'] = True
-                                faces.append(cur_face)
-                                face_id_counter += 1
-                        elif len(faces) <= len(cur_faces):
+                                    cur_faces.append({
+                                        'id': j,
+                                        'center': center,
+                                        'top_left': top_left,
+                                        'bottom_right': bottom_right,
+                                        'width': width,
+                                        'height': height,
+                                        'taken': False,
+                                        'life': life
+                                    })
                             for i, face in enumerate(faces):
-                                nearest_dist = None
-                                match = None
-                                match_j = None
-                                for j, cur_face in enumerate(cur_faces):
-                                    if not cur_face['taken']:
-                                        dist = math.dist(face['center'], cur_face['center'])
-                                        if nearest_dist is None or dist < nearest_dist:
-                                            nearest_dist = dist
-                                            match = cur_face
-                                            match_j = j
-                                match['id'] = face['id']
-                                match['taken'] = True
-                                cur_faces[match_j]['taken'] = True
-                                faces[i] = match
+                                faces[i]['taken'] = False
 
-                            for j, cur_face in enumerate(cur_faces):
-                                if not cur_face['taken']:
+                            if len(faces) == 0 and len(cur_faces) != 0:
+                                for cur_face in cur_faces:
                                     cur_face['id'] = face_id_counter
                                     cur_face['taken'] = True
                                     faces.append(cur_face)
                                     face_id_counter += 1
-                        elif len(faces) > len(cur_faces):
-                            for j, cur_face in enumerate(cur_faces):
-                                nearest_dist = None
-                                match = None
-                                match_i = None
+                            elif len(faces) <= len(cur_faces):
                                 for i, face in enumerate(faces):
-                                    if not face['taken']:
-                                        dist = math.dist(face['center'], cur_face['center'])
-                                        if nearest_dist is None or dist < nearest_dist:
-                                            nearest_dist = dist
-                                            match = face
-                                            match_i = i
-                                if match:
-                                    cur_face['id'] = match['id']
-                                    cur_face['taken'] = True
-                                    faces[match_i] = cur_face
+                                    nearest_dist = None
+                                    match = None
+                                    match_j = None
+                                    for j, cur_face in enumerate(cur_faces):
+                                        if not cur_face['taken']:
+                                            dist = math.dist(face['center'], cur_face['center'])
+                                            if nearest_dist is None or dist < nearest_dist:
+                                                nearest_dist = dist
+                                                match = cur_face
+                                                match_j = j
+                                    match['id'] = face['id']
+                                    match['taken'] = True
+                                    cur_faces[match_j]['taken'] = True
+                                    faces[i] = match
 
-                        # display faces, decrement life of non visible ones, and find first face
-                        first_face = None
-                        for i, face in enumerate(faces):
-                            if not face['taken']:
-                                if face['life'] > 0:
-                                    faces[i]['life'] -= frequency
-                                else:
-                                    faces.pop(i)
-                            is_first_face = not first_face or face['id'] < first_face['id']
-                            if is_first_face:
-                                first_face = face
-                            cv2.rectangle(frame, face['top_left'], face['bottom_right'], (0 if is_first_face else 255, 0 if is_first_face else 255, 255), 2)
-                            cv2.putText(frame, f'{face["id"]}: {int(face["life"])}s', (face['top_left'][0] + 5, face['bottom_right'][1] - 5), cv2.FONT_HERSHEY_COMPLEX, self.font_size, (255, 255, 255))
+                                for j, cur_face in enumerate(cur_faces):
+                                    if not cur_face['taken']:
+                                        cur_face['id'] = face_id_counter
+                                        cur_face['taken'] = True
+                                        faces.append(cur_face)
+                                        face_id_counter += 1
+                            elif len(faces) > len(cur_faces):
+                                for j, cur_face in enumerate(cur_faces):
+                                    nearest_dist = None
+                                    match = None
+                                    match_i = None
+                                    for i, face in enumerate(faces):
+                                        if not face['taken']:
+                                            dist = math.dist(face['center'], cur_face['center'])
+                                            if nearest_dist is None or dist < nearest_dist:
+                                                nearest_dist = dist
+                                                match = face
+                                                match_i = i
+                                    if match:
+                                        cur_face['id'] = match['id']
+                                        cur_face['taken'] = True
+                                        faces[match_i] = cur_face
+
+                            # display faces, decrement life of non visible ones, and find first face
+                            first_face = None
+                            for i, face in enumerate(faces):
+                                if not face['taken']:
+                                    if face['life'] > 0:
+                                        faces[i]['life'] -= frequency
+                                    else:
+                                        faces.pop(i)
+                                is_first_face = not first_face or face['id'] < first_face['id']
+                                if is_first_face:
+                                    first_face = face
+                                cv2.rectangle(frame, face['top_left'], face['bottom_right'], (0 if is_first_face else 255, 0 if is_first_face else 255, 255), 2)
+                                cv2.putText(frame, f'{face["id"]}: {int(face["life"])}s', (face['top_left'][0] + 5, face['bottom_right'][1] - 5), cv2.FONT_HERSHEY_COMPLEX, self.font_size, (255, 255, 255))
 
 
-                        # track first face and center
-                        if first_face is not None:
-                            # get percentages of positions
-                            pos_face_x = (first_face['center'][0] / self.w) * 100
-                            setpoint_face_x = 50
+                            # track first face and center
+                            if first_face is not None:
+                                # get percentages of positions
+                                pos_face_x = (first_face['center'][0] / self.w) * 100
+                                setpoint_face_x = 50
 
-                            # get error resulting from PID controller calculations
-                            raw_face_x_error, _ = pt_helpers.pid_control(pos_face_x, setpoint_face_x, self.pids[0], previous_face_x_integral_error, previous_face_x_error, clamp_i = [-10, 10])
-                            
-                            # acceptable error < 10%
-                            rotational_error = raw_face_x_error if (abs(raw_face_x_error) >= 5) else 0
-
-                            # set current error as previous and add to integral for next interation
-                            previous_face_x_error = raw_face_x_error
-                            previous_face_x_integral_error += raw_face_x_error
-
-                        t_face_e = time.time()
-
-                        t_hands_s = time.time()
-                        hands_result = hand_detection.process(bgr)
-                        hands = []
-                        finger_tip_indices = [hands_module.HandLandmark.INDEX_FINGER_TIP, hands_module.HandLandmark.MIDDLE_FINGER_TIP, hands_module.HandLandmark.RING_FINGER_TIP, hands_module.HandLandmark.PINKY_TIP]
-                        if hands_result.multi_handedness:
-                            for i, hand in enumerate(hands_result.multi_handedness):
-                                finger_count = 0
-                                fingers_bent = {'THUMB': False, 'INDEX': False, 'MIDDLE': False, 'RING': False, 'PINKY': False}
-
-                                label = 'RIGHT' if hand.classification[0].label == 'Left' else 'LEFT' # swap for mirror
-                                landmarks = hands_result.multi_hand_landmarks[i]
-
-                                for tip_index in finger_tip_indices:
-                                    finger_name = tip_index.name.split('_')[0]
-                                    if(landmarks.landmark[tip_index].y > landmarks.landmark[tip_index - 2].y):
-                                        fingers_bent[finger_name] = True
-                                        finger_count += 1
-
-                                palm_side = True
-                                if label == 'LEFT' and landmarks.landmark[hands_module.HandLandmark.INDEX_FINGER_TIP].x > landmarks.landmark[hands_module.HandLandmark.PINKY_TIP].x:
-                                    palm_side = False
-                                elif label == 'RIGHT' and landmarks.landmark[hands_module.HandLandmark.INDEX_FINGER_TIP].x < landmarks.landmark[hands_module.HandLandmark.PINKY_TIP].x:
-                                    palm_side = False
-
-                                thumb_tip_x = landmarks.landmark[hands_module.HandLandmark.THUMB_TIP].x
-                                thumb_mcp_x = landmarks.landmark[hands_module.HandLandmark.THUMB_TIP - 2].x
-                                if label == 'RIGHT':
-                                    if (palm_side and (thumb_tip_x < thumb_mcp_x)) or (not palm_side and (thumb_tip_x > thumb_mcp_x)):
-                                        fingers_bent['THUMB'] = True
-                                        finger_count += 1
-                                else:
-                                    if (palm_side and (thumb_tip_x > thumb_mcp_x)) or (not palm_side and (thumb_tip_x < thumb_mcp_x)):
-                                        fingers_bent['THUMB'] = True
-                                        finger_count += 1
-
-                                bents = fingers_bent['THUMB'], fingers_bent['INDEX'], fingers_bent['MIDDLE'], fingers_bent['RING'], fingers_bent['PINKY']
-                                gesture = 'unknown'
-                                if bents == (False, False, False, False, False):
-                                    gesture = 'open'
-                                elif bents == (True, False, False, True, True):
-                                    gesture = 'follow'
-                                elif bents == (True, False, False, False, True):
-                                    gesture = 'land'
-                                elif bents == (False, True, True, True, False):
-                                    gesture = 'right_flip'
-                                elif bents == (False, False, True, True, True):
-                                    gesture = 'left_flip'
-                                elif bents == (False, False, True, True, False):
-                                    gesture = 'forward'
-                                elif bents == (True, False, True, True, False):
-                                    gesture = 'backward'
-                                elif bents == (True, True, True, True, True):
-                                    gesture = 'punch'
-
-                                wrist_x = int(landmarks.landmark[hands_module.HandLandmark.WRIST].x * 0.90 * self.w)
-                                wrist_y = int(landmarks.landmark[hands_module.HandLandmark.WRIST].y * 1.10 * self.h)
-                                cv2.putText(frame, gesture, (wrist_x, wrist_y), cv2.FONT_HERSHEY_COMPLEX, self.font_size, (255, 255, 255))
+                                # get error resulting from PID controller calculations
+                                raw_face_x_error, _ = pt_helpers.pid_control(pos_face_x, setpoint_face_x, self.pids[0], previous_face_x_integral_error, previous_face_x_error, clamp_i = [-10, 10])
                                 
-                                hands.append({
-                                    'id': i,
-                                    'label': label,
-                                    'palm_side': palm_side,
-                                    'fingers_bent': fingers_bent,
-                                    'finger_count': finger_count,
-                                    'center': (int(landmarks.landmark[hands_module.HandLandmark.MIDDLE_FINGER_MCP].x * self.w), int(landmarks.landmark[hands_module.HandLandmark.MIDDLE_FINGER_MCP].y * self.h)),
-                                    'gesture': gesture
-                                })
+                                # acceptable error < 10%
+                                rotational_error = raw_face_x_error if (abs(raw_face_x_error) >= 1) else 0
 
-                                drawing_module.draw_landmarks(frame, landmarks, hands_module.HAND_CONNECTIONS)
+                                # set current error as previous and add to integral for next interation
+                                previous_face_x_error = raw_face_x_error
+                                previous_face_x_integral_error += raw_face_x_error
 
-                        if len(hands) > 0:
-                            hand = hands[0]
-                            gesture = hand['gesture']
+                            t_face_e = time.time()
 
-                            if gesture != previous_gesture:
-                                previous_gesture = gesture
+                            t_hands_s = time.time()
+                            hands_result = hand_detection.process(bgr)
+                            hands = []
+                            finger_tip_indices = [hands_module.HandLandmark.INDEX_FINGER_TIP, hands_module.HandLandmark.MIDDLE_FINGER_TIP, hands_module.HandLandmark.RING_FINGER_TIP, hands_module.HandLandmark.PINKY_TIP]
+                            if hands_result.multi_handedness:
+                                for i, hand in enumerate(hands_result.multi_handedness):
+                                    finger_count = 0
+                                    fingers_bent = {'THUMB': False, 'INDEX': False, 'MIDDLE': False, 'RING': False, 'PINKY': False}
+
+                                    label = 'RIGHT' if hand.classification[0].label == 'Left' else 'LEFT' # swap for mirror
+                                    landmarks = hands_result.multi_hand_landmarks[i]
+
+                                    for tip_index in finger_tip_indices:
+                                        finger_name = tip_index.name.split('_')[0]
+                                        if(landmarks.landmark[tip_index].y > landmarks.landmark[tip_index - 2].y):
+                                            fingers_bent[finger_name] = True
+                                            finger_count += 1
+
+                                    palm_side = True
+                                    if label == 'LEFT' and landmarks.landmark[hands_module.HandLandmark.INDEX_FINGER_TIP].x > landmarks.landmark[hands_module.HandLandmark.PINKY_TIP].x:
+                                        palm_side = False
+                                    elif label == 'RIGHT' and landmarks.landmark[hands_module.HandLandmark.INDEX_FINGER_TIP].x < landmarks.landmark[hands_module.HandLandmark.PINKY_TIP].x:
+                                        palm_side = False
+
+                                    thumb_tip_x = landmarks.landmark[hands_module.HandLandmark.THUMB_TIP].x
+                                    thumb_mcp_x = landmarks.landmark[hands_module.HandLandmark.THUMB_TIP - 2].x
+                                    if label == 'RIGHT':
+                                        if (palm_side and (thumb_tip_x < thumb_mcp_x)) or (not palm_side and (thumb_tip_x > thumb_mcp_x)):
+                                            fingers_bent['THUMB'] = True
+                                            finger_count += 1
+                                    else:
+                                        if (palm_side and (thumb_tip_x > thumb_mcp_x)) or (not palm_side and (thumb_tip_x < thumb_mcp_x)):
+                                            fingers_bent['THUMB'] = True
+                                            finger_count += 1
+
+                                    bents = fingers_bent['THUMB'], fingers_bent['INDEX'], fingers_bent['MIDDLE'], fingers_bent['RING'], fingers_bent['PINKY']
+                                    gesture = 'unknown'
+                                    if bents == (False, False, False, False, False):
+                                        gesture = 'follow'
+                                    elif bents == (True, False, False, False, False):
+                                        gesture = 'follow'
+                                    elif bents == (True, False, False, True, True):
+                                        gesture = 'peace'
+                                    elif bents == (True, False, False, False, True):
+                                        gesture = 'land'
+                                    elif bents == (False, True, True, True, False):
+                                        gesture = 'right_flip'
+                                    elif bents == (False, False, True, True, True):
+                                        gesture = 'left_flip'
+                                    elif bents == (False, False, True, True, False):
+                                        gesture = 'forward'
+                                    elif bents == (True, False, True, True, False):
+                                        gesture = 'backward'
+                                    elif bents == (True, True, True, True, True):
+                                        gesture = 'close'
+
+                                    wrist_x = int(landmarks.landmark[hands_module.HandLandmark.WRIST].x * 0.90 * self.w)
+                                    wrist_y = int(landmarks.landmark[hands_module.HandLandmark.WRIST].y * 1.10 * self.h)
+                                    cv2.putText(frame, gesture, (wrist_x, wrist_y), cv2.FONT_HERSHEY_COMPLEX, self.font_size, (255, 255, 255))
+                                    
+                                    hands.append({
+                                        'id': i,
+                                        'label': label,
+                                        'palm_side': palm_side,
+                                        'fingers_bent': fingers_bent,
+                                        'finger_count': finger_count,
+                                        'center': (int(landmarks.landmark[hands_module.HandLandmark.MIDDLE_FINGER_MCP].x * self.w), int(landmarks.landmark[hands_module.HandLandmark.MIDDLE_FINGER_MCP].y * self.h)),
+                                        'gesture': gesture
+                                    })
+
+                                    drawing_module.draw_landmarks(frame, landmarks, hands_module.HAND_CONNECTIONS)
+
+                            if len(hands) > 0:
+                                hand = hands[0]
+                                gesture = hand['gesture']
+                                time_passed_since_last_gesture = time.time() - previous_gesture_at
+
+                                if gesture != previous_gesture and time_passed_since_last_gesture > 2: # 2 sesconds
+                                    if gesture == 'land' or gesture == 'left_flip' or gesture == 'right_flip':
+                                        print(gesture)
+                                        self.video_command = gesture
+                                        resetBias()
+                                    elif gesture == 'follow' and not biased:
+                                        # bias
+                                        previous_horizontal_bias = int(((hand['center'][0] / self.w) * 100) - 50)
+                                        previous_vertical_bias = int(((hand['center'][1] / self.h) * 100) - 50)
+                                        biased = True
+                                    previous_gesture = gesture
+                                    previous_gesture_at = time.time()
+                                # elif gesture == 'follow' and biased and (previous_gesture == 'follow' or previous_gesture == 'unknown' or previous_gesture == None):
+                                #     pass
+                                elif gesture == previous_gesture and time_passed_since_last_gesture > 0.2: # 200 ms
+                                    if gesture == 'backward':
+                                        distance_error = -20
+                                        resetBias()
+                                    elif gesture == 'forward':
+                                        distance_error = 20
+                                        resetBias()
+                                    elif gesture == 'follow':
+                                        if biased:
+                                            # get percentages of positions
+                                            pos_horizontal = (hand['center'][0] / self.w) * 100
+                                            setpoint_horizontal = 50 + previous_horizontal_bias
+
+                                            # get error resulting from PID controller calculations
+                                            raw_horizontal_error, _ = pt_helpers.pid_control(pos_horizontal, setpoint_horizontal, self.pids[2], previous_horizontal_integral_error, previous_horizontal_error, clamp_i = [-10, 10])
+                                            
+                                            # acceptable error < 0%
+                                            horizontal_error = raw_horizontal_error if (abs(raw_horizontal_error) >= 0) else 0
+
+                                            # set current error as previous and add to integral for next interation
+                                            previous_horizontal_error = raw_horizontal_error
+                                            previous_horizontal_integral_error += raw_horizontal_error
+
+                                            # get percentages of positions
+                                            pos_vertical = (hand['center'][1] / self.h) * 100
+                                            setpoint_vertical = 50 + previous_vertical_bias
+
+                                            # get error resulting from PID controller calculations
+                                            raw_vertical_error, _ = pt_helpers.pid_control(pos_vertical, setpoint_vertical, self.pids[1], previous_vertical_integral_error, previous_vertical_error, clamp_i = [-10, 10])
+                                            
+                                            # acceptable error < 0%
+                                            vertical_error = raw_vertical_error if (abs(raw_vertical_error) >= 0) else 0
+
+                                            # display setpoints
+                                            cv2.rectangle(frame, (int((setpoint_horizontal / 100) * self.w) - 50, int((setpoint_vertical / 100) * self.h) - 50), (int((setpoint_horizontal / 100) * self.w) + 50, int((setpoint_vertical / 100) * self.h) + 50), (255, 255, 255))
+
+                                            # set current error as previous and add to integral for next interation
+                                            previous_vertical_error = raw_vertical_error
+                                            previous_vertical_integral_error += raw_vertical_error
+                                    else:
+                                        resetBias()
+                                        previous_gesture = gesture
+                                        previous_gesture_at = time.time()
+                            else:
+                                previous_gesture = None # nothing found
                                 previous_gesture_at = time.time()
-                            elif gesture == previous_gesture and time.time() - previous_gesture_at > 2: # 2 seconds
-                                if gesture == 'backward':
-                                    distance_error = -20
-                                elif gesture == 'forward':
-                                    distance_error = 20
-                                elif gesture == 'land' or gesture == 'left_flip' or gesture == 'right_flip':
-                                    self.video_command = gesture
-                                    previous_gesture = None
-                                    previous_gesture_at = time.time()
-                                elif gesture == 'follow':
-                                    # get percentages of positions
-                                    pos_horizontal = (hand['center'][0] / self.w) * 100
-                                    setpoint_horizontal = 50
+                            t_hands_e = time.time()
 
-                                    # get error resulting from PID controller calculations
-                                    raw_horizontal_error, _ = pt_helpers.pid_control(pos_horizontal, setpoint_horizontal, self.pids[2], previous_horizontal_integral_error, previous_horizontal_error, clamp_i = [-10, 10])
-                                    
-                                    # acceptable error < 5%
-                                    horizontal_error = raw_horizontal_error if (abs(raw_horizontal_error) >= 1) else 0
+                            # display targets for debugging
+                            rotational_error_px = int(self.half_w + ((rotational_error / 100) * self.w))
+                            horizontal_error_px = int(self.half_w + ((horizontal_error / 100) * self.w))
+                            vertical_error_px = int(self.half_h + ((vertical_error / 100) * self.h))
 
-                                    # set current error as previous and add to integral for next interation
-                                    previous_horizontal_error = raw_horizontal_error
-                                    previous_horizontal_integral_error += raw_horizontal_error
+                            target_color = (0, 255, 0)
+                            if distance_error < 0:
+                                target_color = (0, 0, 255)
+                            elif distance_error > 0:
+                                target_color = (0, 255, 255)
 
-                                    # get percentages of positions
-                                    pos_vertical = (hand['center'][1] / self.w) * 100
-                                    setpoint_vertical = 50
+                            # cv2.line(frame, (self.half_w, self.half_h), (horizontal_error_px, vertical_error_px), (0, 255, 255), 2)
+                            cv2.line(frame, (self.half_w, self.half_h), (rotational_error_px, self.half_h), target_color, 2)
+                            cv2.line(frame, (rotational_error_px, self.half_h - 10), (rotational_error_px, self.half_h + 10), target_color, 2)
+                            cv2.circle(frame, (horizontal_error_px, vertical_error_px), 20, target_color, 2)
+                            # cv2.circle(frame, (horizontal_error_px, vertical_error_px), z_circle_r, (255, 255, 255), 2)
 
-                                    # get error resulting from PID controller calculations
-                                    raw_vertical_error, _ = pt_helpers.pid_control(pos_vertical, setpoint_vertical, self.pids[1], previous_vertical_integral_error, previous_vertical_error, clamp_i = [-10, 10])
-                                    
-                                    # acceptable error < 5%
-                                    vertical_error = raw_vertical_error if (abs(raw_vertical_error) >= 1) else 0
-
-                                    # set current error as previous and add to integral for next interation
-                                    previous_vertical_error = raw_vertical_error
-                                    previous_vertical_integral_error += raw_vertical_error
-                                else:
-                                    previous_gesture = None
-                                    previous_gesture_at = time.time()
-                        t_hands_e = time.time()
-
-                        # display targets for debugging
-                        rotational_error_px = int(self.half_w + ((rotational_error / 100) * self.w))
-                        horizontal_error_px = int(self.half_w + ((horizontal_error / 100) * self.w))
-                        vertical_error_px = int(self.half_h + ((vertical_error / 100) * self.h))
-
-                        target_color = (0, 255, 0)
-                        if distance_error < 0:
-                            target_color = (0, 0, 255)
-                        elif distance_error > 0:
-                            target_color = (0, 255, 255)
-
-                        # cv2.line(frame, (self.half_w, self.half_h), (horizontal_error_px, vertical_error_px), (0, 255, 255), 2)
-                        cv2.line(frame, (self.half_w, self.half_h), (rotational_error_px, self.half_h), target_color, 2)
-                        cv2.line(frame, (rotational_error_px, self.half_h - 10), (rotational_error_px, self.half_h + 10), target_color, 2)
-                        cv2.circle(frame, (horizontal_error_px, vertical_error_px), 20, target_color, 2)
-                        # cv2.circle(frame, (horizontal_error_px, vertical_error_px), z_circle_r, (255, 255, 255), 2)
+                        if self.peripheral_manual_control or (self.manual_vertical_speed is not None and self.manual_vertical_speed != 0):
+                            cv2.putText(frame, 'MANUAL CONTROL', (self.half_w - 125, self.h - 100), cv2.FONT_HERSHEY_COMPLEX, self.font_size, (0, 0, 255))
 
 
                         battery_x = int(self.w * 0.03)
@@ -603,13 +653,15 @@ class CombinedMode():
     def takeoff(self):
         print('Taking off!')
         self.drone.takeoff()
+        self.drone.rc(0, 50, 0, 0)
+        time.sleep(4)
         self.drone.stabilize()
         self.stabilized_since_last_iteration = True
         self.airborne = True
 
     def land(self):
         print('Landing!')
-        self.follow_face= False
+        self.vision_mode = False
         self.drone.land()
         self.airborne = False
 
