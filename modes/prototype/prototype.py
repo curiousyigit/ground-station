@@ -157,7 +157,7 @@ class CombinedMode():
 
                 if self.imu_safe_range and (self.manual_vertical_speed != p_vertical_speed or self.manual_yaw_corrected != p_yaw or self.manual_roll_corrected != p_roll or self.manual_pitch_corrected != p_pitch):
                     if self.peripheral_manual_control:
-                        self.drone.rc(self.manual_yaw_corrected, self.manual_vertical_speed, self.manual_roll_corrected, self.manual_pitch_corrected)
+                        self.drone.rc(self.manual_yaw_corrected, self.manual_vertical_speed, -self.manual_roll_corrected, self.manual_pitch_corrected)
                         p_vertical_speed = self.manual_vertical_speed
                         p_yaw = self.manual_yaw_corrected
                         p_roll = self.manual_roll_corrected
@@ -165,6 +165,8 @@ class CombinedMode():
                     elif self.manual_vertical_speed != p_vertical_speed:
                         self.drone.rc(0, self.manual_vertical_speed, 0, 0)
                         p_vertical_speed = self.manual_vertical_speed
+                    elif not self.vision_mode:
+                        self.drone.rc(0, 0, 0, 0)
 
                 if not self.peripheral_manual_control and self.vision_mode:
                     self.drone.rc(self.video_corrections[0] * 2, -self.video_corrections[1] * 2, self.video_corrections[2] * 2, self.video_corrections[3] * 2)
