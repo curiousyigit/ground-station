@@ -16,5 +16,5 @@ This is a Python 3 based drone ground station built within **Shoaib Feda**'s bac
 <br></br>
 # How to make changes
 - Modify the code as required
-- Update requirements.txt using pipreqs using the command `pipreqs --force`
+- Update requirements.txt, for example by using the python library `pipreqs` using the command `pipreqs --force`. Becareful however that this library is buggy and may miss some libraries used in your code
 - Commit to git
